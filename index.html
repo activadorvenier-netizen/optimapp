@@ -1195,6 +1195,7 @@
         const acciones = document.createElement('div');
         acciones.className = 'acciones';
         if (modoHistorial) {
+          // En historial SÍ se mantiene "Ir" (útil para navegar un día pasado)
           const btnIr = document.createElement('button');
           btnIr.textContent = '🧭 Ir';
           btnIr.addEventListener('click', () => {
@@ -1209,13 +1210,6 @@
             btnVisitar.textContent = '✅ Marcar visitado y seguir';
             btnVisitar.addEventListener('click', () => marcarVisitado(item.id));
             acciones.appendChild(btnVisitar);
-            const btnIr = document.createElement('button');
-            btnIr.textContent = '🧭 Ir';
-            btnIr.addEventListener('click', () => {
-              map.setView([c.lat, c.lng], 16);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-            acciones.appendChild(btnIr);
           } else {
             const span = document.createElement('span');
             span.style.color = COLOR_VISITADO;
@@ -1236,11 +1230,17 @@
     function marcarVisitado(id) {
       const idStr = String(id);
       if (!seleccionados[idStr]) return;
+
+      // Calcular el número de orden de visita real (contando los ya visitados + 1)
+      const visitadosActuales = Object.values(seleccionados).filter(s => s.visitado).length;
+      const numeroVisita = visitadosActuales + 1;
+
       seleccionados[idStr].visitado = true;
+      seleccionados[idStr].orden = numeroVisita;
 
       guardarVisitaEnSheet(idStr, 'actualizar').then(ok => {
         document.getElementById('status').textContent = ok
-          ? `✅ Visita de #${idStr} guardada en el Sheet`
+          ? `✅ Visita #${numeroVisita} de #${idStr} guardada en el Sheet`
           : `⚠️ No se pudo guardar #${idStr} en el Sheet`;
       });
 
@@ -1317,6 +1317,7 @@
         return;
       }
 
+      // Renumerar SOLO los pendientes desde 1, según el orden óptimo actual
       let ordenadosPendientes = [];
       if (pendientes.length > 0 && ubicacionActual) {
         ordenadosPendientes = ordenarPorCercania(ubicacionActual, pendientes);
