@@ -383,6 +383,66 @@
 
     const _debounceTimers = {};
 
+    // ============================================================
+    // PERSISTENCIA DE ESTADO (para que no se pierda al cerrar la app)
+    // ============================================================
+    const STORAGE_KEY = 'optimapp_estado_v1';
+
+    function guardarEstado() {
+      try {
+        if (!rutaCalculada || Object.keys(seleccionados).length === 0) return;
+        const estado = {
+          seleccionados: seleccionados,
+          fecha: document.getElementById('fechaVisita').value,
+          usuario: document.getElementById('usuario').value.trim(),
+          fechaGuardado: new Date().toISOString()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+      } catch (e) {
+        console.error('Error al guardar estado:', e);
+      }
+    }
+
+    function restaurarEstado() {
+      try {
+        const guardado = localStorage.getItem(STORAGE_KEY);
+        if (!guardado) return false;
+
+        const estado = JSON.parse(guardado);
+        const fechaGuardado = new Date(estado.fechaGuardado);
+        const ahora = new Date();
+        const horasTranscurridas = (ahora - fechaGuardado) / (1000 * 60 * 60);
+
+        if (horasTranscurridas > 24) {
+          localStorage.removeItem(STORAGE_KEY);
+          return false;
+        }
+
+        if (estado.fecha) document.getElementById('fechaVisita').value = estado.fecha;
+        if (estado.usuario) document.getElementById('usuario').value = estado.usuario;
+
+        if (estado.seleccionados && Object.keys(estado.seleccionados).length > 0) {
+          seleccionados = estado.seleccionados;
+          rutaCalculada = true;
+
+          document.getElementById('seccionSeleccion').classList.add('oculto');
+          document.getElementById('seccionRuta').classList.remove('oculto');
+
+          dibujarSoloMarcadores();
+          renderizarListaRuta();
+          actualizarPanelProximo();
+
+          document.getElementById('status').textContent =
+            `🔄 Estado restaurado · ${Object.keys(seleccionados).length} clientes`;
+          return true;
+        }
+      } catch (e) {
+        console.error('Error al restaurar estado:', e);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      return false;
+    }
+
     function initMap() {
       map = L.map('map').setView([-33.05, -61.16], 11);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -416,6 +476,7 @@
       });
       document.getElementById('filtroUsuario').addEventListener('change', aplicarFiltroUsuario);
 
+      restaurarEstado();
       cargarClientes();
     }
 
@@ -1026,6 +1087,7 @@
         renderizarListaRuta();
         actualizarPanelProximo();
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        guardarEstado();
       } catch (err) {
         console.error(err);
         document.getElementById('status').textContent = `Error al calcular ruta: ${err.message}`;
@@ -1176,6 +1238,7 @@
 
       // Siempre recalcula: repinta visitados en verde + recalcula ruta a pendientes
       recalcularSinVisitados();
+      guardarEstado();
     }
 
     async function guardarVisitaEnSheet(idStr, modo = 'agregar') {
@@ -1226,6 +1289,7 @@
       if (_debounceTimers[idStr]) clearTimeout(_debounceTimers[idStr]);
       _debounceTimers[idStr] = setTimeout(() => {
         guardarVisitaEnSheet(idStr, 'actualizar');
+        guardarEstado();
         delete _debounceTimers[idStr];
       }, delay);
     }
@@ -1283,7 +1347,6 @@
       marcadoresRuta.forEach(e => map.removeLayer(e.marker));
       marcadoresRuta = [];
 
-      // Ordenar: pendientes por su orden, visitados al final (o según su orden original)
       const todosOrdenados = todos.slice().sort((a, b) => {
         const selA = seleccionados[String(a.id)];
         const selB = seleccionados[String(b.id)];
@@ -1305,11 +1368,12 @@
 
       renderizarListaRuta();
 
-      const km = rutaActual ? '—' : '';
       document.getElementById('status').textContent =
         pendientes.length > 0
           ? `✅ Ruta recalculada · ${pendientes.length} pendiente${pendientes.length !== 1 ? 's' : ''}`
           : `🎉 ¡Todos los clientes visitados!`;
+
+      guardarEstado();
     }
 
     function volverASeleccion() {
@@ -1336,6 +1400,7 @@
       document.getElementById('seccionRuta').classList.add('oculto');
       document.getElementById('seccionSeleccion').classList.remove('oculto');
       document.getElementById('status').textContent = 'Selección limpiada ✓';
+      localStorage.removeItem(STORAGE_KEY);
     }
 
     async function cerrarYExportar() {
@@ -1430,6 +1495,7 @@
         document.getElementById('seccionSeleccion').classList.remove('oculto');
         renderizarListaClientes();
         cargarClientes();
+        localStorage.removeItem(STORAGE_KEY);
       }
     }
 
