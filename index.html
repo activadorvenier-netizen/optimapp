@@ -788,6 +788,13 @@
         return;
       }
       document.getElementById('status').textContent = 'Iniciando seguimiento GPS...';
+
+      const opcionesGPS = {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      };
+
       watchId = navigator.geolocation.watchPosition(
         (position) => {
           const nueva = [position.coords.latitude, position.coords.longitude];
@@ -799,7 +806,7 @@
             actualizarMarcadorUsuario();
             actualizarPanelProximo();
             if (!primerFijado) {
-              map.setView(ubicacionActual, 15);
+              map.setView(ubicacionActual, 16);
               primerFijado = true;
             }
           }
@@ -814,10 +821,11 @@
             case error.TIMEOUT: msg = 'Tiempo de espera agotado.'; break;
           }
           document.getElementById('status').textContent = msg;
-          detenerSeguimiento();
+          if (error.code === error.PERMISSION_DENIED) detenerSeguimiento();
         },
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+        opcionesGPS
       );
+
       document.getElementById('btnUbicacion').textContent = '⏸️ Detener seguimiento';
       document.getElementById('btnUbicacion').classList.remove('primary');
       document.getElementById('btnUbicacion').classList.add('btn-detener');
@@ -1236,7 +1244,6 @@
           : `⚠️ No se pudo guardar #${idStr} en el Sheet`;
       });
 
-      // Siempre recalcula: repinta visitados en verde + recalcula ruta a pendientes
       recalcularSinVisitados();
       guardarEstado();
     }
@@ -1294,10 +1301,6 @@
       }, delay);
     }
 
-    // ============================================================
-    // Recalcula ruta hacia PENDIENTES, pero dibuja TODOS los marcadores
-    // (visitados en verde + pendientes en azul)
-    // ============================================================
     async function recalcularSinVisitados() {
       const pendientes = Object.keys(seleccionados)
         .filter(id => !seleccionados[id].visitado)
@@ -1314,7 +1317,6 @@
         return;
       }
 
-      // 1. Reordenar SOLO los pendientes desde la ubicación actual
       let ordenadosPendientes = [];
       if (pendientes.length > 0 && ubicacionActual) {
         ordenadosPendientes = ordenarPorCercania(ubicacionActual, pendientes);
@@ -1324,7 +1326,6 @@
         });
       }
 
-      // 2. Dibujar ruta SOLO si hay pendientes
       if (rutaActual) { map.removeLayer(rutaActual); rutaActual = null; }
       if (ordenadosPendientes.length > 0 && ubicacionActual) {
         const coordenadas = [ubicacionActual, ...ordenadosPendientes.map(c => [c.lat, c.lng])];
@@ -1343,7 +1344,6 @@
         }
       }
 
-      // 3. Redibujar TODOS los marcadores (visitados verde, pendientes azul)
       marcadoresRuta.forEach(e => map.removeLayer(e.marker));
       marcadoresRuta = [];
 
