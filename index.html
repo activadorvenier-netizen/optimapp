@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Optimapp - Ruteo Óptimo</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --venier-azul-oscuro: #1F5C8A;
+      --venier-azul-claro: #7BA3C0;
+      --venier-azul-hover: #17466A;
+      --venier-gris-fondo: #f5f7fa;
+      --venier-texto: #333;
+      --venier-texto-suave: #666;
+      --verde-exito: #137333;
+      --verde-exito-hover: #0d5c28;
+      --rojo-peligro: #c5221f;
+      --rojo-peligro-hover: #fce8e6;
+      --naranja-historial: #e37400;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--venier-gris-fondo);
+      color: var(--venier-texto);
+    }
+
+    .app-header {
+      background: #fff;
+      border-bottom: 3px solid var(--venier-azul-oscuro);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 8px rgba(31,92,138,0.08);
+    }
+    .app-header img.logo {
+      height: 55px;
+      width: auto;
+      display: block;
+    }
+    .app-header .titulos h1 {
+      margin: 0;
+      font-size: 24px;
+      color: var(--venier-azul-oscuro);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .app-header .titulos .subtitulo {
+      margin: 2px 0 0 0;
+      font-size: 13px;
+      color: var(--venier-azul-claro);
+      font-weight: 500;
+    }
+    .app-main {
+      padding: 15px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(31,92,138,0.10);
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    button {
+      padding: 10px 15px;
+      font-size: 15px;
+      cursor: pointer;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #f5f5f5;
+      font-family: inherit;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button:hover { background: #e8e8e8; }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    button.primary {
+      background: var(--venier-azul-oscuro);
+      color: #fff;
+      border-color: var(--venier-azul-oscuro);
+    }
+    button.primary:hover { background: var(--venier-azul-hover); }
+
+    button.success {
+      background: var(--verde-exito);
+      color: #fff;
+      border-color: var(--verde-exito);
+    }
+    button.success:hover { background: var(--verde-exito-hover); }
+
+    button.danger {
+      background: #fff;
+      color: var(--rojo-peligro);
+      border-color: var(--rojo-peligro);
+    }
+    button.danger:hover { background: var(--rojo-peligro-hover); }
+
+    button.warning {
+      background: var(--naranja-historial);
+      color: #fff;
+      border-color: var(--naranja-historial);
+    }
+    button.warning:hover { background: #c56300; }
+
+    select, input[type="text"], input[type="date"], textarea {
+      padding: 9px 10px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-family: inherit;
+    }
+    select:focus, input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--venier-azul-oscuro);
+      box-shadow: 0 0 0 2px rgba(31,92,138,0.15);
+    }
+    input[type="text"] { flex: 1; min-width: 220px; }
+    textarea { width: 100%; min-height: 50px; resize: vertical; margin-top: 6px; font-size: 13px; }
+    textarea[readonly], select[disabled] { background: #f0f0f0; cursor: not-allowed; }
+
+    #status { color: var(--venier-texto-suave); font-style: italic; font-size: 14px; }
+
+    #map { height: 420px; width: 100%; border-radius: 8px; border: 1px solid #ddd; }
+
+    #listaClientes {
+      max-height: 400px; overflow-y: auto;
+      border: 1px solid #eee; border-radius: 6px;
+      padding: 6px; background: #fafafa;
+    }
+    .client-item { padding: 8px 4px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .client-item:last-child { border-bottom: none; }
+    .client-item input[type="checkbox"] { margin-right: 8px; }
+    .client-item .sub { color: #777; font-size: 12px; margin-left: 24px; }
+    .client-item .sub2 { color: var(--venier-azul-claro); font-size: 12px; margin-left: 24px; margin-top: 2px; font-weight: 500; }
+    .client-item .id-cliente { color: var(--venier-azul-oscuro); font-weight: bold; }
+    .client-item.seleccionado {
+      background: #EAF2F8;
+      border-left: 3px solid var(--venier-azul-oscuro);
+      padding-left: 6px;
+    }
+
+    .filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .contador { font-size: 13px; color: #666; margin-left: auto; }
+    .badge {
+      background: var(--venier-azul-oscuro); color: #fff;
+      padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px;
+    }
+    .badge-historial {
+      display: inline-block;
+      background: var(--naranja-historial); color: #fff;
+      padding: 3px 10px; border-radius: 10px;
+      font-size: 12px; margin-left: 8px;
+    }
+
+    .fecha-box, .usuario-box { display: flex; align-items: center; gap: 8px; }
+    .fecha-box label, .usuario-box label { font-size: 14px; color: #555; }
+    .usuario-box input { width: 120px; }
+
+    .orden-num {
+      display: inline-block;
+      background: var(--venier-azul-oscuro); color: #fff;
+      width: 24px; height: 24px;
+      border-radius: 50%; text-align: center; line-height: 24px;
+      font-size: 12px; font-weight: bold; margin-right: 8px;
+    }
+    .ruta-item { padding: 10px; border-bottom: 1px solid #eee; }
+    .ruta-item:last-child { border-bottom: none; }
+    .ruta-item.visitado { background: #e6f4ea; opacity: 0.85; }
+    .ruta-item .nombre { font-weight: bold; font-size: 14px; }
+    .ruta-item .detalle { color: #666; font-size: 12px; margin: 3px 0 6px 32px; }
+    .ruta-item .detalle2 { color: var(--venier-azul-claro); font-size: 12px; margin: 0 0 6px 32px; font-weight: 500; }
+    .ruta-item .acciones { margin-left: 32px; margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .ruta-item .acciones button { font-size: 12px; padding: 5px 10px; }
+    .ruta-item .campos { margin-left: 32px; margin-top: 8px; }
+    .ruta-item .campos label { font-size: 12px; color: #555; display: block; margin-bottom: 3px; font-weight: 600; }
+    .ruta-item .campos select { width: 100%; font-size: 13px; }
+    .ruta-item .campos textarea { margin-left: 0; width: 100%; }
+
+    .oculto { display: none !important; }
+
+    #panelProximo {
+      background: linear-gradient(135deg, var(--venier-azul-oscuro), var(--venier-azul-claro));
+      color: #fff;
+      padding: 14px;
+      border-radius: 8px;
+      margin-top: 10px;
+      box-shadow: 0 2px 8px rgba(31,92,138,0.3);
+    }
+    #panelProximo .titulo { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
+    #panelProximo .cliente { font-size: 18px; font-weight: bold; margin: 4px 0; }
+    #panelProximo .detalle { font-size: 13px; opacity: 0.95; }
+    #panelProximo .distancia { font-size: 22px; font-weight: bold; margin-top: 6px; }
+
+    .btn-detener { background: var(--rojo-peligro) !important; color: #fff !important; border-color: var(--rojo-peligro) !important; }
+    .estado-gps { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+    .punto-gps { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #bbb; }
+    .punto-gps.activo { background: var(--verde-exito); box-shadow: 0 0 6px var(--verde-exito); animation: pulso 1.5s infinite; }
+    @keyframes pulso { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .popup-info { font-size: 12px; line-height: 1.5; }
+    .popup-info .label { font-weight: bold; color: #444; }
+    .popup-info .sep { border-top: 1px solid #eee; margin: 8px 0 6px 0; }
+
+    #bannerHistorial {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    #bannerHistorial .texto { flex: 1; font-size: 14px; }
+    #bannerHistorial .acciones { display: flex; gap: 6px; }
+    #bannerHistorial button { font-size: 13px; padding: 7px 12px; }
+
+    .filtro-usuario { display: flex; align-items: center; gap: 6px; }
+    .filtro-usuario label { font-size: 13px; color: #555; font-weight: 600; }
+    .filtro-usuario select { font-size: 13px; padding: 7px 10px; }
+
+    .app-footer {
+      text-align: right;
+      padding: 15px 20px;
+      color: var(--venier-texto-suave);
+      font-size: 12px;
+      font-style: italic;
+      border-top: 1px solid #e0e0e0;
+      margin-top: 20px;
+    }
+    .app-footer .firma {
+      color: var(--venier-azul-oscuro);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="app-header">
+    <img src="https://i.imgur.com/ym3owuC.png" alt="Grupo Venier" class="logo" />
+    <div class="titulos">
+      <h1>🗺️ Optimapp</h1>
+      <p class="subtitulo">Ruteo Óptimo de Salidas a la Calle</p>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <div class="card">
+      <div class="row">
+        <button id="btnUbicacion" class="primary">📍 Obtener ubicación</button>
+        <span class="estado-gps"><span id="puntoGps" class="punto-gps"></span><span id="estadoGps">GPS inactivo</span></span>
+        <div class="fecha-box">
+          <label for="fechaVisita">📅 Fecha:</label>
+          <input type="date" id="fechaVisita" />
+        </div>
+        <div class="usuario-box">
+          <label for="usuario">👤 Usuario:</label>
+          <input type="text" id="usuario" placeholder="Tu nombre" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <span id="status">Cargando clientes...</span>
+      </div>
+    </div>
+
+    <div id="bannerHistorial" class="oculto">
+      <div class="texto" id="bannerTexto"></div>
+      <div class="acciones">
+        <button id="btnVerHistorial" class="warning">👁️ Ver en el mapa</button>
+        <button id="btnIgnorarHistorial">✖️ Empezar de cero</button>
+      </div>
+    </div>
+
+    <div id="seccionSeleccion">
+      <div class="card">
+        <div class="filtros">
+          <select id="filtroSupervisor"><option value="">Todos los supervisores</option></select>
+          <select id="filtroPromotor"><option value="">Todos los promotores</option></select>
+          <select id="filtroLocalidad"><option value="">Todas las localidades</option></select>
+          <select id="filtroSubcanal"><option value="">Todos los subcanales</option></select>
+          <input type="text" id="buscador" placeholder="🔍 Buscar por nombre, ID o dirección..." />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="margin-bottom:8px;">
+          <strong>Clientes</strong>
+          <span class="badge" id="badgeSeleccionados">0 seleccionados</span>
+          <span class="contador" id="contadorClientes"></span>
+        </div>
+        <div id="listaClientes"></div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <button id="btnRecalcular" class="primary">🔄 Calcular ruta</button>
+          <button id="btnLimpiar" class="danger">🗑️ Limpiar selección</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div id="map"></div>
+      <div id="panelProximo" class="oculto"></div>
+    </div>
+
+    <div id="seccionRuta" class="card oculto">
+      <div class="row" style="margin-bottom:8px;">
+        <strong id="tituloRuta">🛣️ Ruta del día</strong>
+        <span id="badgeHistorial" class="badge-historial oculto">🕐 HISTORIAL</span>
+        <button id="btnVolverSeleccion" style="margin-left:auto;font-size:13px;padding:6px 10px;">← Volver a la selección</button>
+        <button id="btnExportar" class="success" style="font-size:13px;padding:6px 10px;">📊 Exportar a Excel</button>
+      </div>
+
+      <div id="filtroUsuarioWrap" class="filtro-usuario oculto" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #eee;">
+        <label for="filtroUsuario">👥 Ver visitas de:</label>
+        <select id="filtroUsuario">
+          <option value="">Todos los usuarios</option>
+          <option value="__yo__">Solo yo</option>
+        </select>
+        <span class="contador" id="contadorHistorial"></span>
+      </div>
+
+      <div id="listaRuta"></div>
+    </div>
+
+  </main>
+
+  <footer class="app-footer">
+    <span class="firma">By Pato Frangi</span>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const URL_SHEETS_API = 'https://script.google.com/macros/s/AKfycbwBa3Pd-zWPhPAdHQ5EoESHTOxy62IWieu09Hg8Hd6Kt7WfRymqK5385o3AzrfrNag8/exec';
+
+    const COLOR_PRIMARIO = '#1F5C8A';
+    const COLOR_SECUNDARIO = '#7BA3C0';
+    const COLOR_VISITADO = '#137333';
+
+    const MOTIVOS = [
+      'NO COMPRADORES',
+      'EFICIENCIA VTAS',
+      'CAIDA VOLUMEN',
+      'NPS',
+      'TOP 5',
+      'PROGRAMA MERCADO',
+      'NEGOCIACIONES',
+      'OTROS'
+    ];
+
+    let map, marcadorUsuario = null, rutaActual = null;
+    let marcadoresRuta = [];
+    let clientes = [];
+    let clientesFiltrados = [];
+    let ubicacionActual = null;
+    let watchId = null;
+    let seleccionados = {};
+    let rutaCalculada = false;
+    let primerFijado = false;
+
+    let modoHistorial = false;
+    let visitasHistorial = [];
+
+    const _debounceTimers = {};
+
+    function initMap() {
+      map = L.map('map').setView([-33.05, -61.16], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19
+      }).addTo(map);
+
+      document.getElementById('fechaVisita').valueAsDate = new Date();
+
+      const usuarioGuardado = localStorage.getItem('usuario') || '';
+      document.getElementById('usuario').value = usuarioGuardado;
+      document.getElementById('usuario').addEventListener('input', (e) => {
+        localStorage.setItem('usuario', e.target.value.trim());
+        if (modoHistorial) aplicarFiltroUsuario();
+      });
+
+      document.getElementById('btnUbicacion').addEventListener('click', toggleGPS);
+      document.getElementById('btnRecalcular').addEventListener('click', () => calcularRutaOptima());
+      document.getElementById('btnLimpiar').addEventListener('click', botonLimpiarClick);
+      document.getElementById('btnExportar').addEventListener('click', cerrarYExportar);
+      document.getElementById('btnVolverSeleccion').addEventListener('click', volverASeleccion);
+      document.getElementById('filtroSupervisor').addEventListener('change', aplicarFiltros);
+      document.getElementById('filtroPromotor').addEventListener('change', aplicarFiltros);
+      document.getElementById('filtroLocalidad').addEventListener('change', aplicarFiltros);
+      document.getElementById('filtroSubcanal').addEventListener('change', aplicarFiltros);
+      document.getElementById('buscador').addEventListener('input', aplicarFiltros);
+      document.getElementById('fechaVisita').addEventListener('change', onFechaCambiada);
+      document.getElementById('btnVerHistorial').addEventListener('click', cargarHistorial);
+      document.getElementById('btnIgnorarHistorial').addEventListener('click', () => {
+        document.getElementById('bannerHistorial').classList.add('oculto');
+      });
+      document.getElementById('filtroUsuario').addEventListener('change', aplicarFiltroUsuario);
+
+      cargarClientes();
+    }
+
+    function formatearFecha(d) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function formatearFechaBonita(fechaISO) {
+      const [y, m, d] = fechaISO.split('-');
+      return `${d}/${m}/${y}`;
+    }
+
+    function onFechaCambiada(e) {
+      const fechaSeleccionada = e.target.value;
+      const hoy = formatearFecha(new Date());
+
+      if (fechaSeleccionada === hoy || !fechaSeleccionada) {
+        document.getElementById('bannerHistorial').classList.add('oculto');
+        if (modoHistorial) salirModoHistorial();
+        return;
+      }
+
+      consultarVisitasDeFecha(fechaSeleccionada);
+    }
+
+    async function consultarVisitasDeFecha(fecha) {
+      const banner = document.getElementById('bannerHistorial');
+      const texto = document.getElementById('bannerTexto');
+      texto.textContent = 'Buscando visitas guardadas...';
+      banner.classList.remove('oculto');
+
+      const usuarioActual = document.getElementById('usuario').value.trim();
+
+      try {
+        const res = await fetch(`${URL_SHEETS_API}?fecha=${fecha}`);
+        const visitas = await res.json();
+
+        if (!Array.isArray(visitas) || visitas.length === 0) {
+          texto.innerHTML = `📅 No hay visitas registradas el ${formatearFechaBonita(fecha)}.`;
+          document.getElementById('btnVerHistorial').disabled = true;
+          return;
+        }
+
+        const mias = usuarioActual
+          ? visitas.filter(v => v.usuario === usuarioActual).length
+          : 0;
+
+        texto.innerHTML = `📅 <b>Hay ${visitas.length} visitas registradas el ${formatearFechaBonita(fecha)}</b>` +
+          (usuarioActual ? ` (${mias} tuyas como "${usuarioActual}")` : '') + '.';
+        document.getElementById('btnVerHistorial').disabled = false;
+      } catch (err) {
+        console.error(err);
+        banner.classList.add('oculto');
+      }
+    }
+
+    async function cargarHistorial() {
+      const fecha = document.getElementById('fechaVisita').value;
+      try {
+        const res = await fetch(`${URL_SHEETS_API}?fecha=${fecha}`);
+        const visitas = await res.json();
+
+        if (!Array.isArray(visitas) || visitas.length === 0) {
+          alert('No hay visitas para esa fecha.');
+          return;
+        }
+
+        visitasHistorial = visitas;
+        modoHistorial = true;
+
+        const usuarios = [...new Set(visitas.map(v => v.usuario).filter(Boolean))].sort();
+        const selU = document.getElementById('filtroUsuario');
+        selU.innerHTML = '<option value="">Todos los usuarios</option>' +
+          '<option value="__yo__">Solo yo</option>' +
+          usuarios.map(u => `<option value="${u}">${u}</option>`).join('');
+
+        const usuarioActual = document.getElementById('usuario').value.trim();
+        if (usuarioActual) {
+          selU.value = '__yo__';
+        } else {
+          selU.value = '';
+        }
+
+        document.getElementById('seccionSeleccion').classList.add('oculto');
+        document.getElementById('seccionRuta').classList.remove('oculto');
+        document.getElementById('bannerHistorial').classList.add('oculto');
+        document.getElementById('tituloRuta').textContent = `🕐 Historial del ${formatearFechaBonita(fecha)}`;
+        document.getElementById('badgeHistorial').classList.remove('oculto');
+        document.getElementById('btnRecalcular').classList.add('oculto');
+        document.getElementById('btnLimpiar').textContent = '❌ Salir del historial';
+        document.getElementById('btnLimpiar').classList.remove('danger');
+        document.getElementById('btnLimpiar').classList.add('warning');
+        document.getElementById('filtroUsuarioWrap').classList.remove('oculto');
+        document.getElementById('btnExportar').textContent = '📊 Exportar historial';
+
+        aplicarFiltroUsuario();
+      } catch (err) {
+        console.error(err);
+        alert('Error al cargar el historial: ' + err.message);
+      }
+    }
+
+    function aplicarFiltroUsuario() {
+      if (!modoHistorial) return;
+
+      const selU = document.getElementById('filtroUsuario').value;
+      const usuarioActual = document.getElementById('usuario').value.trim();
+
+      let visitasFiltradas = visitasHistorial;
+      if (selU === '__yo__') {
+        visitasFiltradas = visitasHistorial.filter(v => v.usuario === usuarioActual);
+      } else if (selU !== '') {
+        visitasFiltradas = visitasHistorial.filter(v => v.usuario === selU);
+      }
+
+      seleccionados = {};
+      let sinUbicacion = 0;
+
+      visitasFiltradas.forEach(v => {
+        const cliente = clientes.find(c => String(c.id) === String(v.id));
+        if (!cliente) {
+          sinUbicacion++;
+          return;
+        }
+        const idStr = String(v.id);
+        seleccionados[idStr] = {
+          comentario: v.comentario || '',
+          motivo: v.motivo || '',
+          orden: parseInt(v.orden) || null,
+          visitado: v.visitado === true,
+          usuario: v.usuario || '',
+          idRuta: v.idRuta || cliente.idRuta || '',
+          promotor: v.promotor || cliente.promotor || '',
+          supervisor: v.supervisor || cliente.supervisor || '',
+          _lat: cliente.lat,
+          _lng: cliente.lng,
+          _clienteRef: cliente
+        };
+      });
+
+      dibujarSoloMarcadores();
+
+      document.getElementById('contadorHistorial').textContent =
+        `${visitasFiltradas.length} visitas` + (sinUbicacion > 0 ? ` (${sinUbicacion} sin ubicación)` : '');
+
+      renderizarListaRuta();
+
+      document.getElementById('status').textContent =
+        `🕐 Historial ${formatearFechaBonita(document.getElementById('fechaVisita').value)}: ` +
+        `${visitasFiltradas.length} visitas mostradas`;
+    }
+
+    function crearIconoVisitado(numero) {
+      return L.divIcon({
+        className: '',
+        html: `<div style="
+          background: ${COLOR_VISITADO}; color: #fff; width: 28px; height: 28px;
+          border-radius: 50%; text-align: center; line-height: 28px;
+          font-weight: bold; font-size: 13px; border: 2px solid #fff;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        ">${numero}</div>`,
+        iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14]
+      });
+    }
+
+    function crearIconoPendiente(numero) {
+      return L.divIcon({
+        className: '',
+        html: `<div style="
+          background: ${COLOR_PRIMARIO}; color: #fff; width: 28px; height: 28px;
+          border-radius: 50%; text-align: center; line-height: 28px;
+          font-weight: bold; font-size: 13px; border: 2px solid #fff;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        ">${numero}</div>`,
+        iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14]
+      });
+    }
+
+    function generarHtmlPopup(idCliente, cliente, numeroFallback) {
+      const sel = seleccionados[idCliente] || {};
+      const motivo = sel.motivo || '(sin motivo)';
+      const comentario = sel.comentario || '(sin observaciones)';
+      const promotor = sel.promotor || cliente.promotor || '';
+      const supervisor = sel.supervisor || cliente.supervisor || '';
+      const visitado = !!sel.visitado;
+      const numero = sel.orden || numeroFallback;
+
+      const estadoHtml = visitado
+        ? `<span style="color:${COLOR_VISITADO};font-weight:bold;">✅ Visitado</span>`
+        : `<span style="color:${COLOR_PRIMARIO};font-weight:bold;">⏳ Pendiente</span>`;
+
+      let promotorHtml = '';
+      if (promotor || supervisor) {
+        promotorHtml = '<div class="sep"></div>';
+        if (promotor) promotorHtml += `<div><span class="label">👤 Promotor:</span> ${promotor}</div>`;
+        if (supervisor) promotorHtml += `<div><span class="label">👔 Supervisor:</span> ${supervisor}</div>`;
+      }
+
+      return `
+        <div class="popup-info" style="min-width:240px;max-width:300px;">
+          <div style="font-size:14px;font-weight:bold;margin-bottom:4px;color:${COLOR_PRIMARIO};">
+            ${numero ? numero + '. ' : ''}#${cliente.id} ${cliente.nombre}
+          </div>
+          <div style="color:#666;">
+            ${cliente.direccion}${cliente.localidad ? '<br>' + cliente.localidad : ''}${cliente.subcanal ? ' · ' + cliente.subcanal : ''}
+          </div>
+          ${promotorHtml}
+          <div class="sep"></div>
+          <div><span class="label">🎯 Motivo:</span> ${motivo}</div>
+          <div style="margin-top:4px;"><span class="label">💬 Observaciones:</span> ${comentario}</div>
+          <div class="sep"></div>
+          <div>${estadoHtml}</div>
+        </div>
+      `;
+    }
+
+    function refrescarPopupDe(idCliente) {
+      const entrada = marcadoresRuta.find(m => String(m.idCliente) === String(idCliente));
+      if (!entrada) return;
+      const popup = entrada.marker.getPopup();
+      if (!popup) return;
+      if (entrada.marker.isPopupOpen()) {
+        entrada.marker.setPopupContent(generarPopupNode(entrada.marker));
+      }
+    }
+
+    function generarPopupNode(marker) {
+      const entrada = marcadoresRuta.find(m => m.marker === marker);
+      if (!entrada) return document.createElement('div');
+      const idCliente = entrada.idCliente;
+      const cliente = clientes.find(c => String(c.id) === String(idCliente))
+        || (seleccionados[idCliente] && seleccionados[idCliente]._clienteRef);
+      if (!cliente) return document.createElement('div');
+      const div = document.createElement('div');
+      div.innerHTML = generarHtmlPopup(idCliente, cliente, entrada.numero);
+      return div;
+    }
+
+    function dibujarSoloMarcadores() {
+      if (rutaActual) { map.removeLayer(rutaActual); rutaActual = null; }
+      marcadoresRuta.forEach(e => map.removeLayer(e.marker));
+      marcadoresRuta = [];
+
+      const items = Object.keys(seleccionados)
+        .map(id => ({ id, ...seleccionados[id] }))
+        .filter(x => x._lat && x._lng)
+        .sort((a, b) => (a.orden || 999) - (b.orden || 999));
+
+      if (items.length === 0) return;
+
+      const bounds = L.latLngBounds();
+      items.forEach((item, i) => {
+        bounds.extend([item._lat, item._lng]);
+        const c = item._clienteRef;
+        const numero = item.orden || (i + 1);
+        const icono = item.visitado ? crearIconoVisitado(numero) : crearIconoPendiente(numero);
+        const marker = L.marker([item._lat, item._lng], { icon: icono }).addTo(map);
+        marker.bindPopup(() => generarPopupNode(marker));
+        marcadoresRuta.push({ marker, idCliente: String(c.id), numero });
+      });
+
+      if (items.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
+    }
+
+    function salirModoHistorial() {
+      modoHistorial = false;
+      visitasHistorial = [];
+      seleccionados = {};
+      if (rutaActual) { map.removeLayer(rutaActual); rutaActual = null; }
+      marcadoresRuta.forEach(e => map.removeLayer(e.marker));
+      marcadoresRuta = [];
+
+      document.getElementById('tituloRuta').textContent = '🛣️ Ruta del día';
+      document.getElementById('badgeHistorial').classList.add('oculto');
+      document.getElementById('btnRecalcular').classList.remove('oculto');
+      document.getElementById('btnLimpiar').textContent = '🗑️ Limpiar selección';
+      document.getElementById('btnLimpiar').classList.remove('warning');
+      document.getElementById('btnLimpiar').classList.add('danger');
+      document.getElementById('filtroUsuarioWrap').classList.add('oculto');
+      document.getElementById('btnExportar').textContent = '📊 Cerrar el día y exportar';
+      document.getElementById('seccionRuta').classList.add('oculto');
+      document.getElementById('seccionSeleccion').classList.remove('oculto');
+      document.getElementById('panelProximo').classList.add('oculto');
+
+      renderizarListaClientes();
+      document.getElementById('status').textContent = 'Volviste al modo normal.';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function botonLimpiarClick() {
+      if (modoHistorial) {
+        salirModoHistorial();
+      } else {
+        limpiarSeleccion();
+      }
+    }
+
+    function toggleGPS() {
+      if (watchId === null) iniciarSeguimiento();
+      else detenerSeguimiento();
+    }
+
+    function iniciarSeguimiento() {
+      if (!navigator.geolocation) {
+        document.getElementById('status').textContent = 'Geolocalización no soportada.';
+        return;
+      }
+      document.getElementById('status').textContent = 'Iniciando seguimiento GPS...';
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const nueva = [position.coords.latitude, position.coords.longitude];
+          const precision = position.coords.accuracy;
+          const cambioSignificativo = !ubicacionActual ||
+            calcularDistancia(ubicacionActual, nueva) > 0.005;
+          if (cambioSignificativo) {
+            ubicacionActual = nueva;
+            actualizarMarcadorUsuario();
+            actualizarPanelProximo();
+            if (!primerFijado) {
+              map.setView(ubicacionActual, 15);
+              primerFijado = true;
+            }
+          }
+          document.getElementById('status').textContent =
+            `📡 GPS activo (±${Math.round(precision)}m) · Lat ${ubicacionActual[0].toFixed(5)}, Lng ${ubicacionActual[1].toFixed(5)}`;
+        },
+        (error) => {
+          let msg = 'Error de GPS';
+          switch (error.code) {
+            case error.PERMISSION_DENIED: msg = 'Permiso de ubicación denegado.'; break;
+            case error.POSITION_UNAVAILABLE: msg = 'Ubicación no disponible.'; break;
+            case error.TIMEOUT: msg = 'Tiempo de espera agotado.'; break;
+          }
+          document.getElementById('status').textContent = msg;
+          detenerSeguimiento();
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+      document.getElementById('btnUbicacion').textContent = '⏸️ Detener seguimiento';
+      document.getElementById('btnUbicacion').classList.remove('primary');
+      document.getElementById('btnUbicacion').classList.add('btn-detener');
+      document.getElementById('puntoGps').classList.add('activo');
+      document.getElementById('estadoGps').textContent = 'GPS activo';
+    }
+
+    function detenerSeguimiento() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      document.getElementById('btnUbicacion').textContent = '📍 Obtener ubicación';
+      document.getElementById('btnUbicacion').classList.add('primary');
+      document.getElementById('btnUbicacion').classList.remove('btn-detener');
+      document.getElementById('puntoGps').classList.remove('activo');
+      document.getElementById('estadoGps').textContent = 'GPS inactivo';
+      document.getElementById('status').textContent = 'Seguimiento GPS detenido.';
+    }
+
+    function actualizarMarcadorUsuario() {
+      if (!ubicacionActual) return;
+      if (marcadorUsuario) {
+        marcadorUsuario.setLatLng(ubicacionActual);
+      } else {
+        marcadorUsuario = L.circleMarker(ubicacionActual, {
+          radius: 8, fillColor: COLOR_PRIMARIO, color: '#fff', weight: 2,
+          opacity: 1, fillOpacity: 0.9
+        }).addTo(map).bindPopup('Tu ubicación');
+      }
+    }
+
+    function actualizarPanelProximo() {
+      const panel = document.getElementById('panelProximo');
+      if (!rutaCalculada || !ubicacionActual || modoHistorial) {
+        panel.classList.add('oculto');
+        return;
+      }
+      const pendientes = Object.keys(seleccionados)
+        .map(id => ({ id, ...seleccionados[id], cliente: clientes.find(c => String(c.id) === id) }))
+        .filter(x => x.cliente && !x.visitado)
+        .sort((a, b) => (a.orden || 999) - (b.orden || 999));
+      if (pendientes.length === 0) {
+        panel.innerHTML = `<div class="titulo">Ruta completa</div>
+          <div class="cliente">🎉 ¡Todos visitados!</div>
+          <div class="detalle">Exportá el día cuando quieras.</div>`;
+        panel.classList.remove('oculto');
+        return;
+      }
+      const prox = pendientes[0];
+      const c = prox.cliente;
+      const dist = calcularDistancia(ubicacionActual, [c.lat, c.lng]);
+      panel.innerHTML = `
+        <div class="titulo">Próximo cliente</div>
+        <div class="cliente">#${c.id} ${c.nombre}</div>
+        <div class="detalle">${c.direccion} · ${c.localidad || ''}</div>
+        <div class="distancia">${dist < 1 ? Math.round(dist * 1000) + ' m' : dist.toFixed(1) + ' km'}</div>
+        <div class="detalle" style="margin-top:6px;">📍 Pendientes: ${pendientes.length}</div>
+      `;
+      panel.classList.remove('oculto');
+    }
+
+    async function cargarClientes() {
+      try {
+        const res = await fetch(URL_SHEETS_API);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) {
+          document.getElementById('status').textContent = 'La hoja no tiene datos.';
+          return;
+        }
+        clientes = data;
+        clientesFiltrados = [...clientes];
+        refrescarOpcionesFiltros();
+        renderizarListaClientes();
+        document.getElementById('status').textContent = `${clientes.length} clientes cargados ✓`;
+        if (clientes.length > 0 && !primerFijado) {
+          map.setView([clientes[0].lat, clientes[0].lng], 11);
+        }
+      } catch (err) {
+        console.error(err);
+        document.getElementById('status').textContent = 'Error al cargar clientes.';
+      }
+    }
+
+    function clientesSegunFiltros(excepto) {
+      const sup = document.getElementById('filtroSupervisor').value;
+      const pro = document.getElementById('filtroPromotor').value;
+      const loc = document.getElementById('filtroLocalidad').value;
+      const sub = document.getElementById('filtroSubcanal').value;
+      const texto = document.getElementById('buscador').value.toLowerCase().trim();
+
+      return clientes.filter(c => {
+        if (excepto !== 'supervisor' && sup && c.supervisor !== sup) return false;
+        if (excepto !== 'promotor' && pro && c.promotor !== pro) return false;
+        if (excepto !== 'localidad' && loc && c.localidad !== loc) return false;
+        if (excepto !== 'subcanal' && sub && c.subcanal !== sub) return false;
+        if (excepto !== 'buscador' && texto) {
+          const busqueda = `${c.id} ${c.nombre} ${c.direccion} ${c.localidad}`.toLowerCase();
+          if (!busqueda.includes(texto)) return false;
+        }
+        return true;
+      });
+    }
+
+    function actualizarSelect(selectId, valores, textoDefault, valorActual) {
+      const sel = document.getElementById(selectId);
+      sel.innerHTML = `<option value="">${textoDefault}</option>`;
+      valores.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        if (v === valorActual) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+
+    function refrescarOpcionesFiltros() {
+      const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
+
+      const paraSup = clientesSegunFiltros('supervisor');
+      actualizarSelect('filtroSupervisor', uniq(paraSup.map(c => c.supervisor)), 'Todos los supervisores', document.getElementById('filtroSupervisor').value);
+
+      const paraPro = clientesSegunFiltros('promotor');
+      actualizarSelect('filtroPromotor', uniq(paraPro.map(c => c.promotor)), 'Todos los promotores', document.getElementById('filtroPromotor').value);
+
+      const paraLoc = clientesSegunFiltros('localidad');
+      actualizarSelect('filtroLocalidad', uniq(paraLoc.map(c => c.localidad)), 'Todas las localidades', document.getElementById('filtroLocalidad').value);
+
+      const paraSub = clientesSegunFiltros('subcanal');
+      actualizarSelect('filtroSubcanal', uniq(paraSub.map(c => c.subcanal)), 'Todos los subcanales', document.getElementById('filtroSubcanal').value);
+    }
+
+    function aplicarFiltros() {
+      refrescarOpcionesFiltros();
+
+      const sup = document.getElementById('filtroSupervisor').value;
+      const pro = document.getElementById('filtroPromotor').value;
+      const loc = document.getElementById('filtroLocalidad').value;
+      const sub = document.getElementById('filtroSubcanal').value;
+      const texto = document.getElementById('buscador').value.toLowerCase().trim();
+
+      clientesFiltrados = clientes.filter(c => {
+        if (sup && c.supervisor !== sup) return false;
+        if (pro && c.promotor !== pro) return false;
+        if (loc && c.localidad !== loc) return false;
+        if (sub && c.subcanal !== sub) return false;
+        if (texto) {
+          const busqueda = `${c.id} ${c.nombre} ${c.direccion} ${c.localidad}`.toLowerCase();
+          if (!busqueda.includes(texto)) return false;
+        }
+        return true;
+      });
+      renderizarListaClientes();
+    }
+
+    function renderizarListaClientes() {
+      const contenedor = document.getElementById('listaClientes');
+      contenedor.innerHTML = '';
+      if (clientesFiltrados.length === 0) {
+        contenedor.innerHTML = '<div style="padding:10px;color:#999;">No hay clientes que coincidan.</div>';
+        document.getElementById('contadorClientes').textContent = '0 clientes';
+        return;
+      }
+      clientesFiltrados.forEach((cliente) => {
+        const idStr = String(cliente.id);
+        const estaSeleccionado = idStr in seleccionados;
+        const div = document.createElement('div');
+        div.className = 'client-item' + (estaSeleccionado ? ' seleccionado' : '');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.id = idStr;
+        checkbox.checked = estaSeleccionado;
+        const label = document.createElement('label');
+        label.innerHTML = `<span class="id-cliente">#${cliente.id}</span> ${cliente.nombre} — ${cliente.direccion}`;
+        const sub = document.createElement('div');
+        sub.className = 'sub';
+        sub.textContent = [cliente.localidad, cliente.subcanal].filter(Boolean).join(' · ');
+
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        div.appendChild(sub);
+
+        if (cliente.promotor || cliente.supervisor) {
+          const sub2 = document.createElement('div');
+          sub2.className = 'sub2';
+          const partes = [];
+          if (cliente.promotor) partes.push(`👤 ${cliente.promotor}`);
+          if (cliente.supervisor) partes.push(`👔 ${cliente.supervisor}`);
+          sub2.textContent = partes.join(' · ');
+          div.appendChild(sub2);
+        }
+
+        checkbox.addEventListener('change', (e) => {
+          if (e.target.checked) {
+            if (!(idStr in seleccionados)) {
+              seleccionados[idStr] = {
+                comentario: '', motivo: '', orden: null, visitado: false,
+                idRuta: cliente.idRuta || '',
+                promotor: cliente.promotor || '',
+                supervisor: cliente.supervisor || ''
+              };
+            }
+          } else {
+            delete seleccionados[idStr];
+          }
+          renderizarListaClientes();
+          actualizarBadge();
+        });
+        contenedor.appendChild(div);
+      });
+      document.getElementById('contadorClientes').textContent =
+        `${clientesFiltrados.length} de ${clientes.length} clientes`;
+      actualizarBadge();
+    }
+
+    function actualizarBadge() {
+      const n = Object.keys(seleccionados).length;
+      document.getElementById('badgeSeleccionados').textContent = `${n} seleccionado${n !== 1 ? 's' : ''}`;
+    }
+
+    async function calcularRutaOptima() {
+      if (!ubicacionActual) {
+        document.getElementById('status').textContent = 'Primero activá el GPS.';
+        return;
+      }
+      const seleccionadosArr = Object.keys(seleccionados)
+        .map(id => clientes.find(c => String(c.id) === id))
+        .filter(c => c && !isNaN(c.lat) && !isNaN(c.lng));
+      if (seleccionadosArr.length === 0) {
+        document.getElementById('status').textContent = 'Seleccioná al menos un cliente.';
+        return;
+      }
+      document.getElementById('status').textContent = 'Calculando orden óptimo...';
+      const ordenados = ordenarPorCercania(ubicacionActual, seleccionadosArr);
+      const coordenadas = [ubicacionActual, ...ordenados.map(c => [c.lat, c.lng])];
+      const osrmCoords = coordenadas.map(c => `${c[1]},${c[0]}`).join(';');
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+      try {
+        const res = await fetch(osrmUrl);
+        const data = await res.json();
+        if (!data.routes || data.routes.length === 0) throw new Error('OSRM no devolvió rutas.');
+        const ruta = data.routes[0];
+        if (rutaActual) map.removeLayer(rutaActual);
+        marcadoresRuta.forEach(e => map.removeLayer(e.marker));
+        marcadoresRuta = [];
+        const coordsRuta = ruta.geometry.coordinates.map(c => [c[1], c[0]]);
+        rutaActual = L.polyline(coordsRuta, { color: COLOR_PRIMARIO, weight: 5, opacity: 0.8 }).addTo(map);
+        map.fitBounds(rutaActual.getBounds(), { padding: [30, 30] });
+        ordenados.forEach((c, i) => {
+          const idStr = String(c.id);
+          if (seleccionados[idStr]) seleccionados[idStr].orden = i + 1;
+        });
+        ordenados.forEach((c, i) => {
+          const idStr = String(c.id);
+          const visitado = !!seleccionados[idStr].visitado;
+          const icono = visitado ? crearIconoVisitado(i + 1) : crearIconoPendiente(i + 1);
+          const marker = L.marker([c.lat, c.lng], { icon: icono }).addTo(map);
+          marker.bindPopup(() => generarPopupNode(marker));
+          marcadoresRuta.push({ marker, idCliente: idStr, numero: i + 1 });
+        });
+        const km = (ruta.distance / 1000).toFixed(1);
+        document.getElementById('status').textContent = `✅ ${km} km · ${ordenados.length} clientes en la ruta`;
+        rutaCalculada = true;
+        document.getElementById('seccionSeleccion').classList.add('oculto');
+        document.getElementById('seccionRuta').classList.remove('oculto');
+        renderizarListaRuta();
+        actualizarPanelProximo();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (err) {
+        console.error(err);
+        document.getElementById('status').textContent = `Error al calcular ruta: ${err.message}`;
+      }
+    }
+
+    function renderizarListaRuta() {
+      const cont = document.getElementById('listaRuta');
+      cont.innerHTML = '';
+
+      const items = Object.keys(seleccionados)
+        .map(id => {
+          const sel = seleccionados[id];
+          const cliente = modoHistorial
+            ? sel._clienteRef
+            : clientes.find(c => String(c.id) === id);
+          return { id, ...sel, cliente };
+        })
+        .filter(x => x.cliente)
+        .sort((a, b) => (a.orden || 999) - (b.orden || 999));
+
+      if (items.length === 0) {
+        cont.innerHTML = '<div style="padding:10px;color:#999;">No hay clientes en la ruta.</div>';
+        return;
+      }
+
+      items.forEach(item => {
+        const c = item.cliente;
+        const div = document.createElement('div');
+        div.className = 'ruta-item' + (item.visitado ? ' visitado' : '');
+
+        const nombreDiv = document.createElement('div');
+        nombreDiv.className = 'nombre';
+        nombreDiv.innerHTML = `<span class="orden-num">${item.orden || '?'}</span>` +
+          `<span class="id-cliente">#${c.id}</span> ${c.nombre}${item.visitado ? ' ✅' : ''}` +
+          (modoHistorial && item.usuario ? ` <span style="font-size:11px;color:#666;">👤 ${item.usuario}</span>` : '');
+
+        const detalle = document.createElement('div');
+        detalle.className = 'detalle';
+        detalle.textContent = `${c.direccion} · ${c.localidad || ''}${c.subcanal ? ' · ' + c.subcanal : ''}`;
+
+        const promotorItem = item.promotor || c.promotor;
+        const supervisorItem = item.supervisor || c.supervisor;
+        if (promotorItem || supervisorItem) {
+          const detalle2 = document.createElement('div');
+          detalle2.className = 'detalle2';
+          const partes = [];
+          if (promotorItem) partes.push(`👤 ${promotorItem}`);
+          if (supervisorItem) partes.push(`👔 ${supervisorItem}`);
+          detalle2.textContent = partes.join(' · ');
+          div.appendChild(nombreDiv);
+          div.appendChild(detalle);
+          div.appendChild(detalle2);
+        } else {
+          div.appendChild(nombreDiv);
+          div.appendChild(detalle);
+        }
+
+        const campos = document.createElement('div');
+        campos.className = 'campos';
+        const motivoLabel = document.createElement('label');
+        motivoLabel.textContent = '🎯 Motivo de la visita';
+        const motivoSelect = document.createElement('select');
+        motivoSelect.innerHTML = '<option value="">— Seleccionar motivo —</option>' +
+          MOTIVOS.map(m => `<option value="${m}"${item.motivo === m ? ' selected' : ''}>${m}</option>`).join('');
+        if (modoHistorial) {
+          motivoSelect.disabled = true;
+        } else {
+          motivoSelect.addEventListener('change', (e) => {
+            seleccionados[item.id].motivo = e.target.value;
+            refrescarPopupDe(item.id);
+            guardarConDebounce(item.id);
+          });
+        }
+
+        const comentLabel = document.createElement('label');
+        comentLabel.textContent = '💬 Comentarios';
+        comentLabel.style.marginTop = '8px';
+        const textarea = document.createElement('textarea');
+        textarea.placeholder = 'Comentarios de la visita...';
+        textarea.value = item.comentario || '';
+        if (modoHistorial) {
+          textarea.readOnly = true;
+        } else {
+          textarea.addEventListener('input', (e) => {
+            seleccionados[item.id].comentario = e.target.value;
+            refrescarPopupDe(item.id);
+            guardarConDebounce(item.id);
+          });
+        }
+
+        campos.appendChild(motivoLabel);
+        campos.appendChild(motivoSelect);
+        campos.appendChild(comentLabel);
+        campos.appendChild(textarea);
+
+        const acciones = document.createElement('div');
+        acciones.className = 'acciones';
+        if (modoHistorial) {
+          const btnIr = document.createElement('button');
+          btnIr.textContent = '🧭 Ir';
+          btnIr.addEventListener('click', () => {
+            map.setView([c.lat, c.lng], 16);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          });
+          acciones.appendChild(btnIr);
+        } else {
+          if (!item.visitado) {
+            const btnVisitar = document.createElement('button');
+            btnVisitar.className = 'success';
+            btnVisitar.textContent = '✅ Marcar visitado y seguir';
+            btnVisitar.addEventListener('click', () => marcarVisitado(item.id));
+            acciones.appendChild(btnVisitar);
+            const btnIr = document.createElement('button');
+            btnIr.textContent = '🧭 Ir';
+            btnIr.addEventListener('click', () => {
+              map.setView([c.lat, c.lng], 16);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+            acciones.appendChild(btnIr);
+          } else {
+            const span = document.createElement('span');
+            span.style.color = COLOR_VISITADO;
+            span.style.fontSize = '12px';
+            span.textContent = '✅ Visitado';
+            acciones.appendChild(span);
+          }
+        }
+
+        div.appendChild(campos);
+        div.appendChild(acciones);
+        cont.appendChild(div);
+      });
+
+      if (!modoHistorial) actualizarPanelProximo();
+    }
+
+    function marcarVisitado(id) {
+      const idStr = String(id);
+      if (!seleccionados[idStr]) return;
+      seleccionados[idStr].visitado = true;
+
+      guardarVisitaEnSheet(idStr, 'actualizar').then(ok => {
+        document.getElementById('status').textContent = ok
+          ? `✅ Visita de #${idStr} guardada en el Sheet`
+          : `⚠️ No se pudo guardar #${idStr} en el Sheet`;
+      });
+
+      // Siempre recalcula: repinta visitados en verde + recalcula ruta a pendientes
+      recalcularSinVisitados();
+    }
+
+    async function guardarVisitaEnSheet(idStr, modo = 'agregar') {
+      const sel = seleccionados[idStr];
+      if (!sel) return false;
+      const c = modoHistorial
+        ? sel._clienteRef
+        : clientes.find(x => String(x.id) === idStr);
+      if (!c) return false;
+
+      const fecha = document.getElementById('fechaVisita').value;
+      const usuario = document.getElementById('usuario').value.trim() || 'anónimo';
+
+      const visita = {
+        row: c.row,
+        id: c.id,
+        nombre: c.nombre,
+        direccion: c.direccion,
+        localidad: c.localidad,
+        subcanal: c.subcanal,
+        idRuta: sel.idRuta || c.idRuta || '',
+        promotor: sel.promotor || c.promotor || '',
+        supervisor: sel.supervisor || c.supervisor || '',
+        orden: sel.orden || '',
+        fecha: fecha,
+        usuario: usuario,
+        motivo: sel.motivo || '',
+        comentario: sel.comentario || '',
+        visitado: !!sel.visitado
+      };
+
+      try {
+        await fetch(URL_SHEETS_API, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ modo: modo, visitas: [visita] })
+        });
+        return true;
+      } catch (err) {
+        console.error('Error al guardar visita:', err);
+        return false;
+      }
+    }
+
+    function guardarConDebounce(idStr, delay = 1000) {
+      if (!seleccionados[idStr] || !seleccionados[idStr].visitado) return;
+      if (_debounceTimers[idStr]) clearTimeout(_debounceTimers[idStr]);
+      _debounceTimers[idStr] = setTimeout(() => {
+        guardarVisitaEnSheet(idStr, 'actualizar');
+        delete _debounceTimers[idStr];
+      }, delay);
+    }
+
+    // ============================================================
+    // Recalcula ruta hacia PENDIENTES, pero dibuja TODOS los marcadores
+    // (visitados en verde + pendientes en azul)
+    // ============================================================
+    async function recalcularSinVisitados() {
+      const pendientes = Object.keys(seleccionados)
+        .filter(id => !seleccionados[id].visitado)
+        .map(id => clientes.find(c => String(c.id) === id))
+        .filter(c => c && !isNaN(c.lat) && !isNaN(c.lng));
+
+      const todos = Object.keys(seleccionados)
+        .map(id => clientes.find(c => String(c.id) === id))
+        .filter(c => c && !isNaN(c.lat) && !isNaN(c.lng));
+
+      if (todos.length === 0) {
+        renderizarListaRuta();
+        actualizarPanelProximo();
+        return;
+      }
+
+      // 1. Reordenar SOLO los pendientes desde la ubicación actual
+      let ordenadosPendientes = [];
+      if (pendientes.length > 0 && ubicacionActual) {
+        ordenadosPendientes = ordenarPorCercania(ubicacionActual, pendientes);
+        ordenadosPendientes.forEach((c, i) => {
+          const idStr = String(c.id);
+          if (seleccionados[idStr]) seleccionados[idStr].orden = i + 1;
+        });
+      }
+
+      // 2. Dibujar ruta SOLO si hay pendientes
+      if (rutaActual) { map.removeLayer(rutaActual); rutaActual = null; }
+      if (ordenadosPendientes.length > 0 && ubicacionActual) {
+        const coordenadas = [ubicacionActual, ...ordenadosPendientes.map(c => [c.lat, c.lng])];
+        const osrmCoords = coordenadas.map(c => `${c[1]},${c[0]}`).join(';');
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+        try {
+          const res = await fetch(osrmUrl);
+          const data = await res.json();
+          if (data.routes && data.routes.length > 0) {
+            const ruta = data.routes[0];
+            const coordsRuta = ruta.geometry.coordinates.map(c => [c[1], c[0]]);
+            rutaActual = L.polyline(coordsRuta, { color: COLOR_PRIMARIO, weight: 5, opacity: 0.8 }).addTo(map);
+          }
+        } catch (err) {
+          console.error('Error al recalcular ruta:', err);
+        }
+      }
+
+      // 3. Redibujar TODOS los marcadores (visitados verde, pendientes azul)
+      marcadoresRuta.forEach(e => map.removeLayer(e.marker));
+      marcadoresRuta = [];
+
+      // Ordenar: pendientes por su orden, visitados al final (o según su orden original)
+      const todosOrdenados = todos.slice().sort((a, b) => {
+        const selA = seleccionados[String(a.id)];
+        const selB = seleccionados[String(b.id)];
+        const ordA = selA.orden != null ? selA.orden : 9999;
+        const ordB = selB.orden != null ? selB.orden : 9999;
+        return ordA - ordB;
+      });
+
+      todosOrdenados.forEach((c) => {
+        const idStr = String(c.id);
+        const sel = seleccionados[idStr];
+        const visitado = !!sel.visitado;
+        const numero = sel.orden || '';
+        const icono = visitado ? crearIconoVisitado(numero) : crearIconoPendiente(numero);
+        const marker = L.marker([c.lat, c.lng], { icon: icono }).addTo(map);
+        marker.bindPopup(() => generarPopupNode(marker));
+        marcadoresRuta.push({ marker, idCliente: idStr, numero });
+      });
+
+      renderizarListaRuta();
+
+      const km = rutaActual ? '—' : '';
+      document.getElementById('status').textContent =
+        pendientes.length > 0
+          ? `✅ Ruta recalculada · ${pendientes.length} pendiente${pendientes.length !== 1 ? 's' : ''}`
+          : `🎉 ¡Todos los clientes visitados!`;
+    }
+
+    function volverASeleccion() {
+      document.getElementById('seccionRuta').classList.add('oculto');
+      document.getElementById('seccionSeleccion').classList.remove('oculto');
+      renderizarListaClientes();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function limpiarSeleccion() {
+      if (Object.keys(seleccionados).length === 0) {
+        alert('No hay selección para limpiar.');
+        return;
+      }
+      if (!confirm('¿Seguro que querés limpiar toda la selección y los comentarios?')) return;
+      seleccionados = {};
+      rutaCalculada = false;
+      if (rutaActual) { map.removeLayer(rutaActual); rutaActual = null; }
+      marcadoresRuta.forEach(e => map.removeLayer(e.marker));
+      marcadoresRuta = [];
+      document.getElementById('panelProximo').classList.add('oculto');
+      renderizarListaClientes();
+      document.getElementById('listaRuta').innerHTML = '';
+      document.getElementById('seccionRuta').classList.add('oculto');
+      document.getElementById('seccionSeleccion').classList.remove('oculto');
+      document.getElementById('status').textContent = 'Selección limpiada ✓';
+    }
+
+    async function cerrarYExportar() {
+      const ids = Object.keys(seleccionados);
+      if (ids.length === 0) {
+        alert('No hay clientes seleccionados para exportar.');
+        return;
+      }
+      const fecha = document.getElementById('fechaVisita').value;
+      if (!fecha) { alert('Elegí una fecha.'); return; }
+      const usuario = document.getElementById('usuario').value.trim() || 'anónimo';
+
+      const visitas = ids.map(id => {
+        const sel = seleccionados[id];
+        const c = modoHistorial
+          ? sel._clienteRef
+          : clientes.find(x => String(x.id) === id);
+        if (!c) return null;
+        return {
+          row: c.row,
+          id: c.id,
+          nombre: c.nombre,
+          direccion: c.direccion,
+          localidad: c.localidad,
+          subcanal: c.subcanal,
+          idRuta: sel.idRuta || c.idRuta || '',
+          promotor: sel.promotor || c.promotor || '',
+          supervisor: sel.supervisor || c.supervisor || '',
+          orden: sel.orden || '',
+          fecha: fecha,
+          usuario: modoHistorial ? (sel.usuario || usuario) : usuario,
+          motivo: sel.motivo || '',
+          comentario: sel.comentario || '',
+          visitado: !!sel.visitado
+        };
+      }).filter(Boolean).sort((a, b) => (a.orden || 999) - (b.orden || 999));
+
+      try {
+        const headers = [
+          'Orden', 'ID Cliente', 'Nombre', 'Dirección', 'Localidad',
+          'Subcanal', 'ID Ruta', 'Promotor', 'Supervisor', 'Fecha',
+          'Usuario', 'Motivo', 'Visitado', 'Comentario'
+        ];
+        const rows = visitas.map(v => [
+          v.orden, v.id, v.nombre, v.direccion, v.localidad,
+          v.subcanal, v.idRuta, v.promotor, v.supervisor, v.fecha,
+          v.usuario, v.motivo, v.visitado ? 'SÍ' : 'NO', v.comentario
+        ]);
+
+        const datos = [
+          ['Optimapp'],
+          ['Ruteo Óptimo de Salidas a la Calle'],
+          ['Grupo Venier'],
+          [],
+          headers,
+          ...rows
+        ];
+
+        const ws = XLSX.utils.aoa_to_sheet(datos);
+        ws['!cols'] = [
+          { wch: 7 }, { wch: 10 }, { wch: 40 }, { wch: 30 }, { wch: 18 },
+          { wch: 22 }, { wch: 10 }, { wch: 22 }, { wch: 22 }, { wch: 12 },
+          { wch: 14 }, { wch: 22 }, { wch: 10 }, { wch: 50 }
+        ];
+        ws['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },
+          { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },
+          { s: { r: 2, c: 0 }, e: { r: 2, c: 13 } }
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, modoHistorial ? 'Historial' : 'Visitas');
+        const sufijo = modoHistorial ? 'historial' : 'ruta';
+        const nombreArchivo = `Optimapp_${sufijo}_${usuario}_${fecha}.xlsx`;
+        XLSX.writeFile(wb, nombreArchivo);
+        document.getElementById('status').textContent =
+          `✅ Exportado: ${visitas.length} visitas del ${fecha} (${usuario})`;
+      } catch (err) {
+        console.error(err);
+        document.getElementById('status').textContent = 'Error al generar el Excel: ' + err.message;
+        return;
+      }
+
+      if (!modoHistorial) {
+        seleccionados = {};
+        rutaCalculada = false;
+        if (rutaActual) { map.removeLayer(rutaActual); rutaActual = null; }
+        marcadoresRuta.forEach(e => map.removeLayer(e.marker));
+        marcadoresRuta = [];
+        document.getElementById('panelProximo').classList.add('oculto');
+        document.getElementById('seccionRuta').classList.add('oculto');
+        document.getElementById('seccionSeleccion').classList.remove('oculto');
+        renderizarListaClientes();
+        cargarClientes();
+      }
+    }
+
+    function ordenarPorCercania(inicio, lista) {
+      const noVisitados = [...lista];
+      const ordenados = [];
+      let actual = inicio;
+      while (noVisitados.length > 0) {
+        let idxCercano = 0, distMin = Infinity;
+        noVisitados.forEach((cliente, idx) => {
+          const d = calcularDistancia(actual, [cliente.lat, cliente.lng]);
+          if (d < distMin) { distMin = d; idxCercano = idx; }
+        });
+        const cercano = noVisitados.splice(idxCercano, 1)[0];
+        ordenados.push(cercano);
+        actual = [cercano.lat, cercano.lng];
+      }
+      return ordenados;
+    }
+
+    function calcularDistancia(p1, p2) {
+      const R = 6371;
+      const dLat = (p2[0] - p1[0]) * Math.PI / 180;
+      const dLon = (p2[1] - p1[1]) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 +
+                Math.cos(p1[0] * Math.PI/180) * Math.cos(p2[0] * Math.PI/180) *
+                Math.sin(dLon/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    initMap();
+  </script>
+</body>
+</html>
