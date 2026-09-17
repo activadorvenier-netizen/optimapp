@@ -374,6 +374,7 @@
     let clientesFiltrados = [];
     let ubicacionActual = null;
     let watchId = null;
+    let gpsActivoDeseado = false;
     let seleccionados = {};
     let rutaCalculada = false;
     let primerFijado = false;
@@ -475,6 +476,28 @@
         document.getElementById('bannerHistorial').classList.add('oculto');
       });
       document.getElementById('filtroUsuario').addEventListener('change', aplicarFiltroUsuario);
+
+      // ============================================================
+      // RECUPERACIÓN AUTOMÁTICA DEL GPS AL VOLVER DEL SEGUNDO PLANO
+      // (por ejemplo, después de recibir una llamada)
+      // ============================================================
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          // Si el GPS estaba activo antes de irse a segundo plano, reiniciarlo
+          if (gpsActivoDeseado && watchId === null) {
+            console.log('📍 App volvió al primer plano. Reiniciando GPS...');
+            iniciarSeguimiento(true);
+          }
+          // Si había una ruta calculada, redibujar los marcadores para que se vean
+          if (rutaCalculada && Object.keys(seleccionados).length > 0) {
+            setTimeout(() => {
+              try { map.invalidateSize(); } catch(e) {}
+              dibujarSoloMarcadores();
+              actualizarPanelProximo();
+            }, 300);
+          }
+        }
+      });
 
       restaurarEstado();
       cargarClientes();
@@ -778,16 +801,20 @@
     }
 
     function toggleGPS() {
-      if (watchId === null) iniciarSeguimiento();
+      if (watchId === null) iniciarSeguimiento(false);
       else detenerSeguimiento();
     }
 
-    function iniciarSeguimiento() {
+    function iniciarSeguimiento(esRecuperacion) {
       if (!navigator.geolocation) {
         document.getElementById('status').textContent = 'Geolocalización no soportada.';
         return;
       }
-      document.getElementById('status').textContent = 'Iniciando seguimiento GPS...';
+      document.getElementById('status').textContent = esRecuperacion
+        ? '🔄 Reactivando GPS...'
+        : 'Iniciando seguimiento GPS...';
+
+      gpsActivoDeseado = true;
 
       const opcionesGPS = {
         enableHighAccuracy: true,
@@ -838,6 +865,7 @@
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
+      gpsActivoDeseado = false;
       document.getElementById('btnUbicacion').textContent = '📍 Obtener ubicación';
       document.getElementById('btnUbicacion').classList.add('primary');
       document.getElementById('btnUbicacion').classList.remove('btn-detener');
@@ -1075,17 +1103,27 @@
         const coordsRuta = ruta.geometry.coordinates.map(c => [c[1], c[0]]);
         rutaActual = L.polyline(coordsRuta, { color: COLOR_PRIMARIO, weight: 5, opacity: 0.8 }).addTo(map);
         map.fitBounds(rutaActual.getBounds(), { padding: [30, 30] });
-        ordenados.forEach((c, i) => {
+
+        // NUEVO: solo asignar orden a los PENDIENTES. Los visitados mantienen su orden.
+        let contadorPendientes = 0;
+        ordenados.forEach((c) => {
           const idStr = String(c.id);
-          if (seleccionados[idStr]) seleccionados[idStr].orden = i + 1;
+          const sel = seleccionados[idStr];
+          if (sel && !sel.visitado) {
+            contadorPendientes++;
+            sel.orden = contadorPendientes;
+          }
         });
-        ordenados.forEach((c, i) => {
+
+        ordenados.forEach((c) => {
           const idStr = String(c.id);
-          const visitado = !!seleccionados[idStr].visitado;
-          const icono = visitado ? crearIconoVisitado(i + 1) : crearIconoPendiente(i + 1);
+          const sel = seleccionados[idStr];
+          const visitado = !!sel.visitado;
+          const numero = sel.orden || '';
+          const icono = visitado ? crearIconoVisitado(numero) : crearIconoPendiente(numero);
           const marker = L.marker([c.lat, c.lng], { icon: icono }).addTo(map);
           marker.bindPopup(() => generarPopupNode(marker));
-          marcadoresRuta.push({ marker, idCliente: idStr, numero: i + 1 });
+          marcadoresRuta.push({ marker, idCliente: idStr, numero });
         });
         const km = (ruta.distance / 1000).toFixed(1);
         document.getElementById('status').textContent = `✅ ${km} km · ${ordenados.length} clientes en la ruta`;
@@ -1348,6 +1386,9 @@
       const todosOrdenados = todos.slice().sort((a, b) => {
         const selA = seleccionados[String(a.id)];
         const selB = seleccionados[String(b.id)];
+        // Los visitados van primero (con su orden original), los pendientes después (con orden desde 1)
+        if (selA.visitado && !selB.visitado) return -1;
+        if (!selA.visitado && selB.visitado) return 1;
         const ordA = selA.orden != null ? selA.orden : 9999;
         const ordB = selB.orden != null ? selB.orden : 9999;
         return ordA - ordB;
@@ -1435,7 +1476,6 @@
           visitado: !!sel.visitado
         };
       }).filter(Boolean).sort((a, b) => {
-        // Ordenar por orden de visita (visitados primero, no visitados al final)
         const ordA = a.visitado && a.orden ? a.orden : 9999;
         const ordB = b.visitado && b.orden ? b.orden : 9999;
         return ordA - ordB;
