@@ -1195,7 +1195,6 @@
         const acciones = document.createElement('div');
         acciones.className = 'acciones';
         if (modoHistorial) {
-          // En historial SÍ se mantiene "Ir" (útil para navegar un día pasado)
           const btnIr = document.createElement('button');
           btnIr.textContent = '🧭 Ir';
           btnIr.addEventListener('click', () => {
@@ -1231,7 +1230,6 @@
       const idStr = String(id);
       if (!seleccionados[idStr]) return;
 
-      // Calcular el número de orden de visita real (contando los ya visitados + 1)
       const visitadosActuales = Object.values(seleccionados).filter(s => s.visitado).length;
       const numeroVisita = visitadosActuales + 1;
 
@@ -1317,7 +1315,6 @@
         return;
       }
 
-      // Renumerar SOLO los pendientes desde 1, según el orden óptimo actual
       let ordenadosPendientes = [];
       if (pendientes.length > 0 && ubicacionActual) {
         ordenadosPendientes = ordenarPorCercania(ubicacionActual, pendientes);
@@ -1430,14 +1427,19 @@
           idRuta: sel.idRuta || c.idRuta || '',
           promotor: sel.promotor || c.promotor || '',
           supervisor: sel.supervisor || c.supervisor || '',
-          orden: sel.orden || '',
+          orden: sel.visitado ? (sel.orden || '') : '',
           fecha: fecha,
           usuario: modoHistorial ? (sel.usuario || usuario) : usuario,
           motivo: sel.motivo || '',
           comentario: sel.comentario || '',
           visitado: !!sel.visitado
         };
-      }).filter(Boolean).sort((a, b) => (a.orden || 999) - (b.orden || 999));
+      }).filter(Boolean).sort((a, b) => {
+        // Ordenar por orden de visita (visitados primero, no visitados al final)
+        const ordA = a.visitado && a.orden ? a.orden : 9999;
+        const ordB = b.visitado && b.orden ? b.orden : 9999;
+        return ordA - ordB;
+      });
 
       try {
         const headers = [
@@ -1446,7 +1448,7 @@
           'Usuario', 'Motivo', 'Visitado', 'Comentario'
         ];
         const rows = visitas.map(v => [
-          v.orden, v.id, v.nombre, v.direccion, v.localidad,
+          v.visitado ? v.orden : '', v.id, v.nombre, v.direccion, v.localidad,
           v.subcanal, v.idRuta, v.promotor, v.supervisor, v.fecha,
           v.usuario, v.motivo, v.visitado ? 'SÍ' : 'NO', v.comentario
         ]);
