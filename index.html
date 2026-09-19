@@ -485,12 +485,10 @@
         if (document.visibilityState !== 'visible') return;
         console.log('📍 App volvió al primer plano. Restaurando GPS y ruta...');
 
-        // 1. Reactivar GPS si el usuario lo tenía activo
         if (gpsActivoDeseado && watchId === null) {
           iniciarSeguimiento(true);
         }
 
-        // 2. Redibujar la ruta si había una activa
         if (rutaCalculada && Object.keys(seleccionados).length > 0) {
           setTimeout(() => {
             try { map.invalidateSize(); } catch(e) {}
@@ -1270,6 +1268,19 @@
     function marcarVisitado(id) {
       const idStr = String(id);
       if (!seleccionados[idStr]) return;
+
+      // VALIDACIÓN: motivo y comentario obligatorios
+      const sel = seleccionados[idStr];
+      const motivoOk = sel.motivo && sel.motivo.trim() !== '';
+      const comentarioOk = sel.comentario && sel.comentario.trim() !== '';
+
+      if (!motivoOk || !comentarioOk) {
+        const faltantes = [];
+        if (!motivoOk) faltantes.push('el Motivo de la visita');
+        if (!comentarioOk) faltantes.push('los Comentarios');
+        alert('Para guardar la visita tenés que completar ' + faltantes.join(' y ') + '.');
+        return;
+      }
 
       const visitadosActuales = Object.values(seleccionados).filter(s => s.visitado).length;
       const numeroVisita = visitadosActuales + 1;
