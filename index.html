@@ -323,11 +323,6 @@
       <div id="panelProximo" class="oculto"></div>
     </div>
 
-    <div id="barraRecalcular" class="card oculto" style="display:flex; gap:8px; align-items:center; justify-content:flex-end;">
-      <span id="infoRutaActiva" style="margin-right:auto; color:#555; font-size:13px;"></span>
-      <button id="btnRecalcularMapa" class="primary">🔄 Recalcular ruta</button>
-    </div>
-
     <div id="seccionRuta" class="card oculto">
       <div class="row" style="margin-bottom:8px;">
         <strong id="tituloRuta">🛣️ Ruta del día</strong>
@@ -437,7 +432,6 @@
           dibujarSoloMarcadores();
           renderizarListaRuta();
           actualizarPanelProximo();
-          actualizarBarraRecalcular();
 
           document.getElementById('status').textContent =
             `🔄 Estado restaurado · ${Object.keys(seleccionados).length} clientes`;
@@ -471,7 +465,6 @@
       document.getElementById('btnLimpiar').addEventListener('click', botonLimpiarClick);
       document.getElementById('btnExportar').addEventListener('click', cerrarYExportar);
       document.getElementById('btnVolverSeleccion').addEventListener('click', volverASeleccion);
-      document.getElementById('btnRecalcularMapa').addEventListener('click', () => calcularRutaOptima());
       document.getElementById('filtroSupervisor').addEventListener('change', aplicarFiltros);
       document.getElementById('filtroPromotor').addEventListener('change', aplicarFiltros);
       document.getElementById('filtroLocalidad').addEventListener('change', aplicarFiltros);
@@ -485,22 +478,30 @@
       document.getElementById('filtroUsuario').addEventListener('change', aplicarFiltroUsuario);
 
       // ============================================================
-      // RECUPERACIÓN AUTOMÁTICA DEL GPS Y DEL MAPA AL VOLVER DEL SEGUNDO PLANO
+      // REDIBUJAR RUTA AL VOLVER DEL SEGUNDO PLANO
+      // Cubre: llamadas, cambio de app, minimizar, etc.
       // ============================================================
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          if (gpsActivoDeseado && watchId === null) {
-            console.log('📍 App volvió al primer plano. Reiniciando GPS...');
-            iniciarSeguimiento(true);
-          }
-          if (rutaCalculada && Object.keys(seleccionados).length > 0) {
-            setTimeout(() => {
-              try { map.invalidateSize(); } catch(e) {}
-              redibujarRutaCompleta();
-            }, 400);
-          }
+      const reaccionarAlVolver = () => {
+        if (document.visibilityState !== 'visible') return;
+        console.log('📍 App volvió al primer plano. Restaurando GPS y ruta...');
+
+        // 1. Reactivar GPS si el usuario lo tenía activo
+        if (gpsActivoDeseado && watchId === null) {
+          iniciarSeguimiento(true);
         }
-      });
+
+        // 2. Redibujar la ruta si había una activa
+        if (rutaCalculada && Object.keys(seleccionados).length > 0) {
+          setTimeout(() => {
+            try { map.invalidateSize(); } catch(e) {}
+            redibujarRutaCompleta();
+          }, 500);
+        }
+      };
+
+      document.addEventListener('visibilitychange', reaccionarAlVolver);
+      window.addEventListener('focus', reaccionarAlVolver);
+      window.addEventListener('pageshow', reaccionarAlVolver);
 
       restaurarEstado();
       cargarClientes();
@@ -602,7 +603,6 @@
         document.getElementById('btnExportar').textContent = '📊 Exportar historial';
 
         aplicarFiltroUsuario();
-        actualizarBarraRecalcular();
       } catch (err) {
         console.error(err);
         alert('Error al cargar el historial: ' + err.message);
@@ -792,7 +792,6 @@
       document.getElementById('panelProximo').classList.add('oculto');
 
       renderizarListaClientes();
-      actualizarBarraRecalcular();
       document.getElementById('status').textContent = 'Volviste al modo normal.';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -1136,7 +1135,6 @@
         document.getElementById('seccionRuta').classList.remove('oculto');
         renderizarListaRuta();
         actualizarPanelProximo();
-        actualizarBarraRecalcular();
         window.scrollTo({ top: 0, behavior: 'smooth' });
         guardarEstado();
       } catch (err) {
@@ -1287,7 +1285,6 @@
 
       recalcularSinVisitados();
       guardarEstado();
-      actualizarBarraRecalcular();
     }
 
     async function guardarVisitaEnSheet(idStr, modo = 'agregar') {
@@ -1356,7 +1353,6 @@
       if (todos.length === 0) {
         renderizarListaRuta();
         actualizarPanelProximo();
-        actualizarBarraRecalcular();
         return;
       }
 
@@ -1419,7 +1415,6 @@
           : `🎉 ¡Todos los clientes visitados!`;
 
       guardarEstado();
-      actualizarBarraRecalcular();
     }
 
     function volverASeleccion() {
@@ -1447,7 +1442,6 @@
       document.getElementById('seccionSeleccion').classList.remove('oculto');
       document.getElementById('status').textContent = 'Selección limpiada ✓';
       localStorage.removeItem(STORAGE_KEY);
-      actualizarBarraRecalcular();
     }
 
     async function cerrarYExportar() {
@@ -1547,7 +1541,6 @@
         renderizarListaClientes();
         cargarClientes();
         localStorage.removeItem(STORAGE_KEY);
-        actualizarBarraRecalcular();
       }
     }
 
@@ -1558,12 +1551,10 @@
     async function redibujarRutaCompleta() {
       if (!rutaCalculada || Object.keys(seleccionados).length === 0) return;
 
-      // 1. Limpiar todo lo que hay en el mapa
       if (rutaActual) { map.removeLayer(rutaActual); rutaActual = null; }
       marcadoresRuta.forEach(e => map.removeLayer(e.marker));
       marcadoresRuta = [];
 
-      // 2. Separar visitados de pendientes
       const pendientes = Object.keys(seleccionados)
         .filter(id => !seleccionados[id].visitado)
         .map(id => clientes.find(c => String(c.id) === id))
@@ -1575,7 +1566,6 @@
 
       if (todos.length === 0) return;
 
-      // 3. Dibujar la ruta azul hacia los pendientes (si hay ubicación actual)
       if (pendientes.length > 0 && ubicacionActual) {
         const ordenadosPendientes = ordenarPorCercania(ubicacionActual, pendientes);
         ordenadosPendientes.forEach((c, i) => {
@@ -1599,7 +1589,6 @@
         }
       }
 
-      // 4. Redibujar TODOS los marcadores (verdes = visitados, azules = pendientes)
       const todosOrdenados = todos.slice().sort((a, b) => {
         const selA = seleccionados[String(a.id)];
         const selB = seleccionados[String(b.id)];
@@ -1629,31 +1618,11 @@
 
       renderizarListaRuta();
       actualizarPanelProximo();
-      actualizarBarraRecalcular();
 
       document.getElementById('status').textContent =
         pendientes.length > 0
           ? `🔄 Ruta restaurada · ${pendientes.length} pendiente${pendientes.length !== 1 ? 's' : ''}`
           : `🎉 ¡Todos los clientes visitados!`;
-    }
-
-    // ============================================================
-    // Muestra u oculta la barra de "Recalcular ruta" arriba del mapa
-    // ============================================================
-    function actualizarBarraRecalcular() {
-      const barra = document.getElementById('barraRecalcular');
-      const info = document.getElementById('infoRutaActiva');
-      if (!barra) return;
-
-      if (rutaCalculada && !modoHistorial && Object.keys(seleccionados).length > 0) {
-        const total = Object.keys(seleccionados).length;
-        const visitados = Object.values(seleccionados).filter(s => s.visitado).length;
-        const pendientes = total - visitados;
-        info.textContent = `📍 ${pendientes} pendiente${pendientes !== 1 ? 's' : ''} · ✅ ${visitados} visitado${visitados !== 1 ? 's' : ''}`;
-        barra.classList.remove('oculto');
-      } else {
-        barra.classList.add('oculto');
-      }
     }
 
     function ordenarPorCercania(inicio, lista) {
