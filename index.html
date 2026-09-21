@@ -250,6 +250,21 @@
       color: var(--venier-azul-oscuro);
       font-weight: 600;
     }
+
+    /* Estilo del link "Estándar de Ejecución" */
+    .btn-estandar {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 12px;
+      background: var(--venier-azul-claro);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--venier-azul-oscuro);
+    }
+    .btn-estandar:hover { background: var(--venier-azul-oscuro); }
   </style>
 </head>
 <body>
@@ -305,6 +320,10 @@
         <div class="row" style="margin-bottom:8px;">
           <strong>Clientes</strong>
           <span class="badge" id="badgeSeleccionados">0 seleccionados</span>
+          <label style="margin-left:12px; display:inline-flex; align-items:center; gap:6px; font-size:14px; cursor:pointer;">
+            <input type="checkbox" id="chkSeleccionarTodos" />
+            Seleccionar todos los filtrados
+          </label>
           <span class="contador" id="contadorClientes"></span>
         </div>
         <div id="listaClientes"></div>
@@ -352,6 +371,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const URL_SHEETS_API = 'https://script.google.com/macros/s/AKfycbwBa3Pd-zWPhPAdHQ5EoESHTOxy62IWieu09Hg8Hd6Kt7WfRymqK5385o3AzrfrNag8/exec';
+    const URL_ESTANDAR = 'https://estandar-ejecucion-cmq.replit.app/login';
 
     const COLOR_PRIMARIO = '#1F5C8A';
     const COLOR_SECUNDARIO = '#7BA3C0';
@@ -476,11 +496,8 @@
         document.getElementById('bannerHistorial').classList.add('oculto');
       });
       document.getElementById('filtroUsuario').addEventListener('change', aplicarFiltroUsuario);
+      document.getElementById('chkSeleccionarTodos').addEventListener('change', toggleSeleccionarTodos);
 
-      // ============================================================
-      // REDIBUJAR RUTA AL VOLVER DEL SEGUNDO PLANO
-      // Cubre: llamadas, cambio de app, minimizar, etc.
-      // ============================================================
       const reaccionarAlVolver = () => {
         if (document.visibilityState !== 'visible') return;
         console.log('📍 App volvió al primer plano. Restaurando GPS y ruta...');
@@ -1018,6 +1035,7 @@
       if (clientesFiltrados.length === 0) {
         contenedor.innerHTML = '<div style="padding:10px;color:#999;">No hay clientes que coincidan.</div>';
         document.getElementById('contadorClientes').textContent = '0 clientes';
+        actualizarChkSeleccionarTodos();
         return;
       }
       clientesFiltrados.forEach((cliente) => {
@@ -1070,11 +1088,57 @@
       document.getElementById('contadorClientes').textContent =
         `${clientesFiltrados.length} de ${clientes.length} clientes`;
       actualizarBadge();
+      actualizarChkSeleccionarTodos();
     }
 
     function actualizarBadge() {
       const n = Object.keys(seleccionados).length;
       document.getElementById('badgeSeleccionados').textContent = `${n} seleccionado${n !== 1 ? 's' : ''}`;
+    }
+
+    // ============================================================
+    // "Seleccionar todos los filtrados"
+    // ============================================================
+    function toggleSeleccionarTodos(e) {
+      const marcar = e.target.checked;
+      clientesFiltrados.forEach(cliente => {
+        const idStr = String(cliente.id);
+        if (marcar) {
+          if (!(idStr in seleccionados)) {
+            seleccionados[idStr] = {
+              comentario: '', motivo: '', orden: null, visitado: false,
+              idRuta: cliente.idRuta || '',
+              promotor: cliente.promotor || '',
+              supervisor: cliente.supervisor || ''
+            };
+          }
+        } else {
+          delete seleccionados[idStr];
+        }
+      });
+      renderizarListaClientes();
+      actualizarBadge();
+    }
+
+    function actualizarChkSeleccionarTodos() {
+      const chk = document.getElementById('chkSeleccionarTodos');
+      if (!chk) return;
+      if (clientesFiltrados.length === 0) {
+        chk.checked = false;
+        chk.indeterminate = false;
+        return;
+      }
+      const seleccionadosVisibles = clientesFiltrados.filter(c => String(c.id) in seleccionados).length;
+      if (seleccionadosVisibles === 0) {
+        chk.checked = false;
+        chk.indeterminate = false;
+      } else if (seleccionadosVisibles === clientesFiltrados.length) {
+        chk.checked = true;
+        chk.indeterminate = false;
+      } else {
+        chk.checked = false;
+        chk.indeterminate = true;
+      }
     }
 
     async function calcularRutaOptima() {
@@ -1231,6 +1295,15 @@
         campos.appendChild(comentLabel);
         campos.appendChild(textarea);
 
+        // Link al Estándar de Ejecución
+        const linkEstandar = document.createElement('a');
+        linkEstandar.className = 'btn-estandar';
+        linkEstandar.href = URL_ESTANDAR;
+        linkEstandar.target = '_blank';
+        linkEstandar.rel = 'noopener noreferrer';
+        linkEstandar.textContent = '🔗 Estándar de Ejecución';
+        campos.appendChild(linkEstandar);
+
         const acciones = document.createElement('div');
         acciones.className = 'acciones';
         if (modoHistorial) {
@@ -1269,7 +1342,6 @@
       const idStr = String(id);
       if (!seleccionados[idStr]) return;
 
-      // VALIDACIÓN: motivo y comentario obligatorios
       const sel = seleccionados[idStr];
       const motivoOk = sel.motivo && sel.motivo.trim() !== '';
       const comentarioOk = sel.comentario && sel.comentario.trim() !== '';
@@ -1555,10 +1627,6 @@
       }
     }
 
-    // ============================================================
-    // Redibuja todo (marcadores + ruta + lista + panel) desde el estado actual
-    // Se usa al volver del segundo plano
-    // ============================================================
     async function redibujarRutaCompleta() {
       if (!rutaCalculada || Object.keys(seleccionados).length === 0) return;
 
