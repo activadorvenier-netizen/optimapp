@@ -251,7 +251,6 @@
       font-weight: 600;
     }
 
-    /* Estilo del link "Estándar de Ejecución" */
     .btn-estandar {
       display: inline-block;
       margin-top: 8px;
@@ -376,6 +375,7 @@
     const COLOR_PRIMARIO = '#1F5C8A';
     const COLOR_SECUNDARIO = '#7BA3C0';
     const COLOR_VISITADO = '#137333';
+    const COLOR_UBICACION = '#c5221f';
 
     const MOTIVOS = [
       'NO COMPRADORES',
@@ -899,7 +899,7 @@
         marcadorUsuario.setLatLng(ubicacionActual);
       } else {
         marcadorUsuario = L.circleMarker(ubicacionActual, {
-          radius: 8, fillColor: COLOR_PRIMARIO, color: '#fff', weight: 2,
+          radius: 8, fillColor: COLOR_UBICACION, color: '#fff', weight: 2,
           opacity: 1, fillOpacity: 0.9
         }).addTo(map).bindPopup('Tu ubicación');
       }
@@ -1096,9 +1096,6 @@
       document.getElementById('badgeSeleccionados').textContent = `${n} seleccionado${n !== 1 ? 's' : ''}`;
     }
 
-    // ============================================================
-    // "Seleccionar todos los filtrados"
-    // ============================================================
     function toggleSeleccionarTodos(e) {
       const marcar = e.target.checked;
       clientesFiltrados.forEach(cliente => {
@@ -1295,7 +1292,6 @@
         campos.appendChild(comentLabel);
         campos.appendChild(textarea);
 
-        // Link al Estándar de Ejecución
         const linkEstandar = document.createElement('a');
         linkEstandar.className = 'btn-estandar';
         linkEstandar.href = URL_ESTANDAR;
